@@ -13,6 +13,8 @@ SBOX_AUTO_UPDATE="${SBOX_AUTO_UPDATE:-1}"
 SBOX_BRANCH="${SBOX_BRANCH:-}"
 STEAM_PLATFORM="${STEAM_PLATFORM:-windows}"
 RESET_WINEPREFIX_ON_ARCH_MISMATCH="${RESET_WINEPREFIX_ON_ARCH_MISMATCH:-1}"
+INSTALL_WIN_DOTNET="${INSTALL_WIN_DOTNET:-1}"
+WIN_DOTNET_VERSION="${WIN_DOTNET_VERSION:-10.0.2}"
 GAME="${GAME:-}"
 MAP="${MAP:-}"
 SERVER_NAME="${HOSTNAME:-}"
@@ -207,6 +209,41 @@ run_sbox() {
     exec wine "${SBOX_SERVER_EXE}" "${args[@]}"
 }
 
+ensure_windows_dotnet_runtime() {
+    local win_dotnet_dir="${WINEPREFIX}/drive_c/Program Files/dotnet"
+    local win_hostfxr_glob="${win_dotnet_dir}/host/fxr/*/hostfxr.dll"
+    local runtime_zip="${CONTAINER_HOME}/.cache/dotnet-runtime-${WIN_DOTNET_VERSION}-win-x64.zip"
+    local url_primary="https://dotnetcli.azureedge.net/dotnet/Runtime/${WIN_DOTNET_VERSION}/dotnet-runtime-${WIN_DOTNET_VERSION}-win-x64.zip"
+    local url_fallback="https://builds.dotnet.microsoft.com/dotnet/Runtime/${WIN_DOTNET_VERSION}/dotnet-runtime-${WIN_DOTNET_VERSION}-win-x64.zip"
+
+    if ls ${win_hostfxr_glob} >/dev/null 2>&1; then
+        return 0
+    fi
+
+    mkdir -p "${CONTAINER_HOME}/.cache" "${win_dotnet_dir}"
+
+    if [ ! -s "${runtime_zip}" ]; then
+        echo "info: downloading Windows .NET runtime ${WIN_DOTNET_VERSION}" >&2
+        if ! wget -qO "${runtime_zip}" "${url_primary}"; then
+            if ! wget -qO "${runtime_zip}" "${url_fallback}"; then
+                echo "fatal: unable to download Windows .NET runtime ${WIN_DOTNET_VERSION}" >&2
+                return 1
+            fi
+        fi
+    fi
+
+    echo "info: extracting Windows .NET runtime to ${win_dotnet_dir}" >&2
+    if ! unzip -qo "${runtime_zip}" -d "${win_dotnet_dir}"; then
+        echo "fatal: failed to extract Windows .NET runtime archive" >&2
+        return 1
+    fi
+
+    if ! ls ${win_hostfxr_glob} >/dev/null 2>&1; then
+        echo "fatal: Windows .NET runtime extracted but hostfxr.dll still missing" >&2
+        return 1
+    fi
+}
+
 if [ ! -f "${WINEPREFIX}/system.reg" ]; then
     if mkdir "${LOCK_DIR}" 2>/dev/null; then
         if [ ! -f "${WINEPREFIX}/system.reg" ]; then
@@ -229,6 +266,10 @@ if [ ! -f "${WINEPREFIX}/system.reg" ]; then
             sleep 1
         done
     fi
+fi
+
+if [ "${INSTALL_WIN_DOTNET}" = "1" ]; then
+    ensure_windows_dotnet_runtime
 fi
 
 if [ "$#" -eq 0 ] || [ "${1:-}" = "start-sbox" ]; then

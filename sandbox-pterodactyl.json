@@ -115,7 +115,7 @@
             "default_value": "windows",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|in:windows,linux,macos",
+            "rules": "required|in:windows",
             "field_type": "text"
         }
     ]

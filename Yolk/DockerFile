@@ -16,6 +16,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 ENV CONTAINER_HOME=/home/container \
         HOME=/home/container \
+        LANG=C.UTF-8 \
+        LC_ALL=C.UTF-8 \
         WINEPREFIX=/home/container/.wine \
         WINEARCH=win32 \
         WINEDEBUG=-all \
@@ -69,6 +71,7 @@ RUN dpkg --add-architecture i386 \
            wine32 \
            wine64 \
            winbind \
+                          xauth \
            xvfb \
         && rm -rf /var/lib/apt/lists/*
 

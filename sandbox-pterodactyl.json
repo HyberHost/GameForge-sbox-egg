@@ -92,7 +92,7 @@
             "name": "Auto Update",
             "description": "Set to 1 to run SteamCMD app_update on startup, 0 to skip",
             "env_variable": "SBOX_AUTO_UPDATE",
-            "default_value": "1",
+            "default_value": "0",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|in:0,1",
@@ -116,36 +116,6 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|in:windows",
-            "field_type": "text"
-        },
-        {
-            "name": "Dotnet Multilevel Lookup",
-            "description": "Set to 0 to force Wine process to use in-prefix Windows dotnet runtime.",
-            "env_variable": "DOTNET_MULTILEVEL_LOOKUP",
-            "default_value": "0",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|in:0,1",
-            "field_type": "text"
-        },
-        {
-            "name": "Runtime Winetricks Fallback",
-            "description": "Normally 0 when prefix is baked at build time. Set 1 to run winetricks verbs at container startup.",
-            "env_variable": "INSTALL_WINETRICKS_DOTNET",
-            "default_value": "0",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|in:0,1",
-            "field_type": "text"
-        },
-        {
-            "name": "Runtime Dotnet Installer Fallback",
-            "description": "Normally 0 when prefix is baked at build time. Set 1 to install Windows dotnet runtime at startup.",
-            "env_variable": "INSTALL_WIN_DOTNET",
-            "default_value": "0",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|in:0,1",
             "field_type": "text"
         }
     ]

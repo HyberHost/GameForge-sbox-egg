@@ -14,9 +14,12 @@ ARG PUID=999
 ARG PGID=999
 ARG DEBIAN_FRONTEND=noninteractive
 ARG BAKE_WINEPREFIX=1
-ARG BAKE_WINETRICKS_VERBS="dotnet48 dotnet10"
+ARG BAKE_WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10"
 ARG BAKE_WINETRICKS_STRICT=0
 ARG BAKE_WIN_DOTNET_VERSION=10.0.2
+ARG BAKE_SBOX_SERVER=0
+ARG BAKE_SBOX_APP_ID=1892930
+ARG BAKE_SBOX_BRANCH=
 
 ENV CONTAINER_HOME=/home/container \
         HOME=/home/container \
@@ -29,11 +32,11 @@ ENV CONTAINER_HOME=/home/container \
         SBOX_APP_ID=1892930 \
         SBOX_INSTALL_DIR=/home/container/sbox \
         SBOX_SERVER_EXE=/home/container/sbox/sbox-server.exe \
-        SBOX_AUTO_UPDATE=1 \
+        SBOX_AUTO_UPDATE=0 \
         SBOX_BRANCH= \
         STEAM_PLATFORM=windows \
         INSTALL_WINETRICKS_DOTNET=0 \
-        WINETRICKS_VERBS=dotnet48\ dotnet10 \
+        WINETRICKS_VERBS=win10\ vcrun2022\ dotnet48\ dotnet10 \
         WINETRICKS_STRICT=0 \
         INSTALL_WIN_DOTNET=0 \
         WIN_DOTNET_VERSION=10.0.2 \
@@ -111,6 +114,14 @@ COPY Yolk/bake_wineprefix.sh /usr/local/bin/bake_wineprefix.sh
 RUN chmod 0755 /usr/local/bin/bake_wineprefix.sh \
         && if [ "${BAKE_WINEPREFIX}" = "1" ]; then \
                 su -s /bin/bash container -c "BAKE_WINETRICKS_VERBS='${BAKE_WINETRICKS_VERBS}' BAKE_WINETRICKS_STRICT='${BAKE_WINETRICKS_STRICT}' BAKE_WIN_DOTNET_VERSION='${BAKE_WIN_DOTNET_VERSION}' /usr/local/bin/bake_wineprefix.sh"; \
+        fi
+
+RUN if [ "${BAKE_SBOX_SERVER}" = "1" ]; then \
+                if [ -n "${BAKE_SBOX_BRANCH}" ]; then \
+                        su -s /bin/bash container -c "/usr/local/bin/steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir /home/container/sbox +login anonymous +app_update ${BAKE_SBOX_APP_ID} -beta ${BAKE_SBOX_BRANCH} validate +quit"; \
+                else \
+                        su -s /bin/bash container -c "/usr/local/bin/steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir /home/container/sbox +login anonymous +app_update ${BAKE_SBOX_APP_ID} validate +quit"; \
+                fi; \
         fi
 
 COPY --chown=999:999 Yolk/entrypoint.sh /usr/local/bin/entrypoint.sh

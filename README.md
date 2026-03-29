@@ -23,9 +23,13 @@ The image is now configured for build-time baked Wine/.NET by default. This redu
 
 Default behavior:
 
-- Build bakes Wine prefix and Windows .NET runtime
+- Build bakes Wine prefix and Windows .NET runtime (with `win10`, `vcrun2022`, `dotnet48`, `dotnet10`)
 - Runtime does SteamCMD app update and launches S&Box
 - Runtime fallback installers are still available via env vars when needed
+
+Optional production behavior:
+
+- Build can also pre-bake S&Box server files (`app 1892930`) using build args, then run with `SBOX_AUTO_UPDATE=0`
 
 ## Key Environment Variables
 

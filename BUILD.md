@@ -11,7 +11,7 @@ docker build --platform linux/amd64 \
   -f Yolk/DockerFile \
   -t hyberhost/gameforge-sbox-egg:latest \
   --build-arg BAKE_WINEPREFIX=1 \
-  --build-arg BAKE_WINETRICKS_VERBS="dotnet48 dotnet10" \
+   --build-arg BAKE_WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10" \
   --build-arg BAKE_WIN_DOTNET_VERSION=10.0.2 \
   .
 ```
@@ -20,6 +20,18 @@ Optional strict verb enforcement:
 
 ```bash
 --build-arg BAKE_WINETRICKS_STRICT=1
+```
+
+Optional: pre-bake S&Box server files during image build (production style):
+
+```bash
+--build-arg BAKE_SBOX_SERVER=1
+```
+
+Optional with staging branch:
+
+```bash
+--build-arg BAKE_SBOX_SERVER=1 --build-arg BAKE_SBOX_BRANCH=staging
 ```
 
 ## 2. Push to Registry
@@ -43,7 +55,7 @@ Ensure egg image points to your pushed tag.
 Use these defaults unless troubleshooting:
 
 - `STEAM_PLATFORM=windows`
-- `SBOX_AUTO_UPDATE=1`
+- `SBOX_AUTO_UPDATE=0` (preferred when server is baked at build time)
 - `DOTNET_MULTILEVEL_LOOKUP=0`
 - `INSTALL_WINETRICKS_DOTNET=0`
 - `INSTALL_WIN_DOTNET=0`

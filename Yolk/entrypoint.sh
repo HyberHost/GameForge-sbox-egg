@@ -34,6 +34,7 @@ SBOX_EXTRA_ARGS="${SBOX_EXTRA_ARGS:-}"
 SBOX_USE_XVFB="${SBOX_USE_XVFB:-0}"
 SBOX_DEBUG_LOGGING="${SBOX_DEBUG_LOGGING:-0}"
 SBOX_TRACE_STRACE="${SBOX_TRACE_STRACE:-0}"
+SBOX_PURGE_CACHE="${SBOX_PURGE_CACHE:-0}"
 
 detect_prefix_arch() {
     if [ ! -f "${WINEPREFIX}/system.reg" ]; then
@@ -258,38 +259,88 @@ verify_dotnet_runtime() {
     fi
 }
 
-log_managed_artifacts() {
-    local root
-    local report_limit="${SBOX_MANAGED_REPORT_LIMIT:-120}"
-    local -a roots
+purge_sbox_cache() {
+    local target
+    local -a purge_targets
 
-    roots=(
-        "${SBOX_INSTALL_DIR}"
+    if [ "${SBOX_PURGE_CACHE}" != "1" ]; then
+        return 0
+    fi
+
+    purge_targets=(
+        "${SBOX_INSTALL_DIR}/addons/menu/.bin"
+        "${SBOX_INSTALL_DIR}/addons/base/.bin"
+        "${CONTAINER_HOME}/data/.source2"
+        "${CONTAINER_HOME}/data/.shadercache"
+        "${WINEPREFIX}/drive_c/users/${USER:-container}/AppData/Local/Facepunch"
+        "${WINEPREFIX}/drive_c/users/${USER:-container}/AppData/Roaming/Facepunch"
+        "${WINEPREFIX}/drive_c/users/${USER:-container}/Temp"
+    )
+
+    echo "info: purging S&Box caches (SBOX_PURGE_CACHE=1)" >&2
+    for target in "${purge_targets[@]}"; do
+        if [ -e "${target}" ]; then
+            echo "  purge: ${target}" >&2
+            rm -rf "${target}" || true
+        fi
+    done
+}
+
+log_suspicious_directories() {
+    local dir_path
+    local -a dirs
+
+    dirs=(
+        "${SBOX_INSTALL_DIR}/addons/menu/.bin"
+        "${SBOX_INSTALL_DIR}/addons/base/.bin"
         "${CONTAINER_HOME}/data"
         "${WINEPREFIX}/drive_c/users/${USER:-container}/AppData/Local/Facepunch"
         "${WINEPREFIX}/drive_c/users/${USER:-container}/AppData/Roaming/Facepunch"
     )
 
-    echo "info: managed artifact scan (limit=${report_limit})" >&2
-    for root in "${roots[@]}"; do
-        if [ ! -d "${root}" ]; then
+    echo "info: suspicious directory snapshot" >&2
+    for dir_path in "${dirs[@]}"; do
+        if [ -d "${dir_path}" ]; then
+            echo "  dir=${dir_path}" >&2
+            find "${dir_path}" -maxdepth 2 -mindepth 1 2>/dev/null | head -n 25 | sed 's/^/    /' >&2 || true
+        fi
+    done
+}
+
+log_suspicious_artifacts() {
+    local report_limit="${SBOX_MANAGED_REPORT_LIMIT:-40}"
+    local file_path
+    local size
+    local hash
+
+    echo "info: suspicious artifact scan (limit=${report_limit})" >&2
+    shopt -s nullglob globstar
+    for file_path in \
+        "${SBOX_INSTALL_DIR}"/addons/*/.bin/*.dll \
+        "${SBOX_INSTALL_DIR}"/addons/*/.bin/*.pdb \
+        "${SBOX_INSTALL_DIR}"/addons/*/.bin/*.deps.json \
+        "${SBOX_INSTALL_DIR}"/addons/*/.bin/*.runtimeconfig.json \
+        "${CONTAINER_HOME}"/data/**/*.dll \
+        "${CONTAINER_HOME}"/data/**/*.pdb \
+        "${WINEPREFIX}"/drive_c/users/${USER:-container}/AppData/Local/Facepunch/**/*.dll \
+        "${WINEPREFIX}"/drive_c/users/${USER:-container}/AppData/Roaming/Facepunch/**/*.dll; do
+        if [ ! -f "${file_path}" ]; then
             continue
         fi
-
-        echo "info: scanning ${root}" >&2
-
-        find "${root}" -type f \( -iname '*.dll' -o -iname '*.pdb' -o -iname '*.deps.json' -o -iname '*.runtimeconfig.json' \) 2>/dev/null \
-            | head -n "${report_limit}" \
-            | while IFS= read -r file_path; do
-                local size
-                local hash
-                size="$(stat -c '%s' "${file_path}" 2>/dev/null || echo 0)"
-                hash="$(sha256sum "${file_path}" 2>/dev/null | awk '{print $1}' || echo unavailable)"
-                echo "  file=${file_path} size=${size} sha256=${hash}" >&2
-            done
-
-        find "${root}" -type f -size 0 2>/dev/null | head -n 20 | sed 's/^/  zero-byte: /' >&2 || true
+        size="$(stat -c '%s' "${file_path}" 2>/dev/null || echo 0)"
+        hash="$(sha256sum "${file_path}" 2>/dev/null | awk '{print $1}' || echo unavailable)"
+        echo "  file=${file_path} size=${size} sha256=${hash}" >&2
+        report_limit=$((report_limit - 1))
+        if [ "${report_limit}" -le 0 ]; then
+            break
+        fi
     done
+    shopt -u nullglob globstar
+
+    find "${SBOX_INSTALL_DIR}" "${CONTAINER_HOME}/data" "${WINEPREFIX}/drive_c/users/${USER:-container}/AppData" -type f -size 0 2>/dev/null \
+        | head -n 20 | sed 's/^/  zero-byte: /' >&2 || true
+
+    return 0
 }
 
 run_sbox() {
@@ -359,6 +410,7 @@ run_sbox() {
         echo "SBOX_USE_XVFB: ${SBOX_USE_XVFB}"
         echo "SBOX_DEBUG_LOGGING: ${SBOX_DEBUG_LOGGING}"
         echo "SBOX_TRACE_STRACE: ${SBOX_TRACE_STRACE}"
+        echo "SBOX_PURGE_CACHE: ${SBOX_PURGE_CACHE}"
         echo "Game: ${GAME:-none}"
         echo "Map: ${MAP:-none}"
         echo "Server Name: ${SERVER_NAME:-none}"
@@ -382,7 +434,8 @@ run_sbox() {
         ip -br address 2>/dev/null || true
         echo "info: debug snapshot: resolv.conf" >&2
         cat /etc/resolv.conf 2>/dev/null || true
-        log_managed_artifacts
+        log_suspicious_directories
+        log_suspicious_artifacts
     fi
 
     # Capture the real process exit code even with `set -e` enabled globally.
@@ -593,6 +646,7 @@ if [ "${INSTALL_WIN_DOTNET}" = "1" ]; then
 fi
 
 ensure_winetricks_dotnet
+purge_sbox_cache
 
 if [ "$#" -eq 0 ] || [ "${1:-}" = "start-sbox" ]; then
     if [ "${1:-}" = "start-sbox" ]; then

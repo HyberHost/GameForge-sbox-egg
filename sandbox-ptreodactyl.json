@@ -1,0 +1,122 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-03-29T13:07:16+01:00",
+    "name": "S&box Server (Wine)",
+    "author": "support@gameforge.gg",
+    "description": "S&Box dedicated server via Wine with SteamCMD auto-update, Windows depot targeting, and non-root runtime for Pterodactyl.",
+    "features": [],
+    "docker_images": {
+        "hyberhost\/gameforge-sbox-egg:latest": "hyberhost\/gameforge-sbox-egg:latest"
+    },
+    "file_denylist": [],
+    "startup": "start-sbox",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"Loading game\"\r\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!\/bin\/bash\n# No installation required\nexit 0",
+            "container": "alpine:3.18",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Game",
+            "description": "Game to load",
+            "env_variable": "GAME",
+            "default_value": "facepunch.walker",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Hostname",
+            "description": "Server hostname",
+            "env_variable": "HOSTNAME",
+            "default_value": "GameForgeTest",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Map",
+            "description": "Optional map package identifier passed after +game",
+            "env_variable": "MAP",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Game Server Token",
+            "description": "Optional +net_game_server_token value",
+            "env_variable": "TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Local Project (.sbproj)",
+            "description": "Optional absolute path to a .sbproj file. If set, this is used instead of GAME\/MAP.",
+            "env_variable": "SBOX_PROJECT",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Extra Args",
+            "description": "Optional extra command line arguments appended to sbox-server.exe",
+            "env_variable": "SBOX_EXTRA_ARGS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:512",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto Update",
+            "description": "Set to 1 to run SteamCMD app_update on startup, 0 to skip",
+            "env_variable": "SBOX_AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Branch",
+            "description": "Optional Steam beta branch (for example: staging)",
+            "env_variable": "SBOX_BRANCH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Steam Platform",
+            "description": "SteamCMD platform target. Keep as windows for Wine runtime.",
+            "env_variable": "STEAM_PLATFORM",
+            "default_value": "windows",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:windows,linux,macos",
+            "field_type": "text"
+        }
+    ]
+}

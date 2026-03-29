@@ -11,6 +11,7 @@ SBOX_SERVER_EXE="${SBOX_SERVER_EXE:-${SBOX_INSTALL_DIR}/sbox-server.exe}"
 SBOX_APP_ID="${SBOX_APP_ID:-1892930}"
 SBOX_AUTO_UPDATE="${SBOX_AUTO_UPDATE:-1}"
 SBOX_BRANCH="${SBOX_BRANCH:-}"
+STEAM_PLATFORM="${STEAM_PLATFORM:-windows}"
 GAME="${GAME:-}"
 MAP="${MAP:-}"
 SERVER_NAME="${HOSTNAME:-}"
@@ -76,6 +77,7 @@ update_sbox() {
     mkdir -p "${SBOX_INSTALL_DIR}"
 
     steam_args=(
+        +@sSteamCmdForcePlatformType "${STEAM_PLATFORM}"
         +force_install_dir "${SBOX_INSTALL_DIR}"
         +login anonymous
         +app_update "${SBOX_APP_ID}"
@@ -97,12 +99,28 @@ update_sbox() {
     fi
 }
 
+resolve_server_exe() {
+    if [ -f "${SBOX_SERVER_EXE}" ]; then
+        return 0
+    fi
+
+    local detected
+    detected="$(find "${SBOX_INSTALL_DIR}" -maxdepth 6 -type f \( -iname 'sbox-server.exe' -o -iname 'sbox_server.exe' \) 2>/dev/null | head -n 1 || true)"
+    if [ -n "${detected}" ]; then
+        SBOX_SERVER_EXE="${detected}"
+        echo "info: auto-detected S&Box executable at ${SBOX_SERVER_EXE}" >&2
+        return 0
+    fi
+
+    return 1
+}
+
 run_sbox() {
     local -a args
     local -a extra
 
-    if [ ! -f "${SBOX_SERVER_EXE}" ]; then
-        echo "fatal: ${SBOX_SERVER_EXE} not found. Set SBOX_AUTO_UPDATE=1 or mount server files into ${SBOX_INSTALL_DIR}." >&2
+    if ! resolve_server_exe; then
+        echo "fatal: no Windows S&Box server executable found under ${SBOX_INSTALL_DIR}. Verify STEAM_PLATFORM=windows and app/depot content." >&2
         exit 1
     fi
 

@@ -26,6 +26,7 @@ ENV CONTAINER_HOME=/home/container \
         SBOX_SERVER_EXE=/home/container/sbox/sbox-server.exe \
         SBOX_AUTO_UPDATE=1 \
         SBOX_BRANCH= \
+        STEAM_PLATFORM=windows \
         GAME= \
         MAP= \
         HOSTNAME= \

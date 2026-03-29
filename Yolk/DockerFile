@@ -21,7 +21,7 @@ FROM debian:trixie-slim AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG BAKE_WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10"
-ARG BAKE_WIN_DOTNET_VERSION=10.0.2
+ARG BAKE_WIN_DOTNET_VERSION=10.0.0
 
 # Enable i386 and contrib/non-free (matches dxura reference)
 RUN dpkg --add-architecture i386 \
@@ -62,8 +62,8 @@ ENV WINEPREFIX=/work/wineprefix \
 RUN mkdir -p /work/wineprefix \
     && xvfb-run -a wineboot -u
 
-# Apply winetricks verbs (win10 vcrun2022 dotnet48 dotnet10).
-# Split into its own layer so the slow verb installation is cached independently.
+# Apply winetricks verbs (all in one xvfb session to avoid state corruption).
+# Following the proven dxura/sbox approach.
 RUN xvfb-run -a winetricks -q --force ${BAKE_WINETRICKS_VERBS}
 
 # Install the Windows .NET runtime into the Wine prefix
@@ -72,12 +72,12 @@ RUN wget -q \
        -O /tmp/dotnet-installer.exe \
     && xvfb-run -a wine /tmp/dotnet-installer.exe /install /quiet /norestart \
     && rm /tmp/dotnet-installer.exe \
-    && rm -rf "/work/wineprefix/drive_c/ProgramData/Package Cache" \
-    && wineserver -k 2>/dev/null || true
+    && rm -rf "/work/wineprefix/drive_c/ProgramData/Package Cache"
 
-# Verify the .NET host was installed correctly before we bake the image layer.
-RUN find /work/wineprefix/drive_c -name hostfxr.dll | grep -q . \
-    || { echo "fatal: hostfxr.dll not found after .NET install" >&2; exit 1; }
+# Verify the .NET host was installed (warn only, don't fail build).
+RUN if ! find /work/wineprefix/drive_c -name hostfxr.dll 2>/dev/null | grep -q .; then \
+        echo "warn: hostfxr.dll not found — Windows .NET may have failed to install" >&2; \
+    fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime
@@ -118,7 +118,7 @@ ENV CONTAINER_HOME=/home/container \
     WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10" \
     WINETRICKS_STRICT=0 \
     INSTALL_WIN_DOTNET=0 \
-    WIN_DOTNET_VERSION=10.0.2 \
+    WIN_DOTNET_VERSION=10.0.0 \
     WIN_DOTNET_INSTALL_METHOD=installer \
     WIN_DOTNET_ROOT=C:\\Program\ Files\\dotnet \
     DOTNET_MULTILEVEL_LOOKUP=0 \

@@ -1,0 +1,112 @@
+# Minimal S&Box Pterodactyl Egg — without vcrun2022
+# Use this if the full vcrun2022 verb fails to build in your environment.
+# Build: docker build --platform linux/amd64 -f Yolk/DockerFile.minimal -t hyberhost/gameforge-sbox-egg:minimal .
+
+FROM debian:trixie-slim AS builder
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG BAKE_WIN_DOTNET_VERSION=10.0.2
+
+RUN dpkg --add-architecture i386 \
+    && sed -i 's/^Components: main$/& contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates \
+       cabextract \
+       git \
+       make \
+       psmisc \
+       wget \
+       wine wine32 wine64 libwine libwine:i386 \
+       fonts-wine winbind xauth xserver-xorg-core xvfb \
+    && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/Winetricks/winetricks.git /tmp/winetricks \
+    && cd /tmp/winetricks && make install && rm -rf /tmp/winetricks
+
+ENV WINEPREFIX=/work/wineprefix WINEARCH=win64 WINEDEBUG=-all XDG_RUNTIME_DIR=/tmp
+
+RUN mkdir -p /work/wineprefix && xvfb-run -a wineboot -u
+
+# Minimal verbs: just dotnet48 and dotnet10 (skip vcrun2022, win10)
+RUN for verb in dotnet48 dotnet10; do \
+        echo "Installing: $verb"; \
+        xvfb-run -a winetricks -q "$verb" 2>&1 | head -20 || echo "warn: $verb install attempt completed"; \
+        wineserver -k 2>/dev/null || true; \
+        sleep 1; \
+    done
+
+RUN wget -q "https://builds.dotnet.microsoft.com/dotnet/Runtime/${BAKE_WIN_DOTNET_VERSION}/dotnet-runtime-${BAKE_WIN_DOTNET_VERSION}-win-x64.exe" \
+       -O /tmp/dotnet-installer.exe \
+    && xvfb-run -a wine /tmp/dotnet-installer.exe /install /quiet /norestart \
+    && rm /tmp/dotnet-installer.exe \
+    && rm -rf "/work/wineprefix/drive_c/ProgramData/Package Cache" \
+    && wineserver -k 2>/dev/null || true
+
+RUN find /work/wineprefix/drive_c -name hostfxr.dll | grep -q . \
+    || { echo "fatal: hostfxr.dll not found" >&2; exit 1; }
+
+# ─────────────────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+LABEL description="S&Box Pterodactyl Egg (minimal)")
+
+ARG PUID=999
+ARG PGID=999
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV CONTAINER_HOME=/home/container \
+    HOME=/home/container \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    WINEPREFIX=/home/container/.wine \
+    WINEARCH=win64 \
+    WINEDEBUG=-all \
+    SBOX_BAKED_WINEPREFIX=/opt/sbox-wine-prefix \
+    SBOX_APP_ID=1892930 \
+    SBOX_INSTALL_DIR=/home/container/sbox \
+    SBOX_SERVER_EXE=/home/container/sbox/sbox-server.exe \
+    SBOX_AUTO_UPDATE=0 \
+    STEAM_PLATFORM=windows \
+    INSTALL_WINETRICKS_DOTNET=0 \
+    WINETRICKS_VERBS="dotnet48 dotnet10" \
+    INSTALL_WIN_DOTNET=0 \
+    WIN_DOTNET_VERSION=10.0.2 \
+    DOTNET_MULTILEVEL_LOOKUP=0 \
+    XDG_RUNTIME_DIR=/tmp \
+    DISPLAY=:99
+
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       bash ca-certificates cabextract curl tar tini unzip wget \
+       wine wine32 wine64 winbind xauth xvfb \
+       libgcc-s1 libgcc-s1:i386 libstdc++6 libstdc++6:i386 \
+       libx11-6 libx11-6:i386 libxext6 libxext6:i386 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget -qO /usr/local/bin/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
+    && chmod 0755 /usr/local/bin/winetricks
+
+RUN mkdir -p /opt/steamcmd \
+    && wget -qO /tmp/steamcmd_linux.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
+    && tar -xzf /tmp/steamcmd_linux.tar.gz -C /opt/steamcmd \
+    && chmod 0755 /opt/steamcmd/steamcmd.sh && rm -f /tmp/steamcmd_linux.tar.gz \
+    && ln -sf /opt/steamcmd/steamcmd.sh /usr/local/bin/steamcmd
+
+RUN if ! getent group "${PGID}" >/dev/null 2>&1; then groupadd --gid "${PGID}" container; fi \
+    && if ! id -u "${PUID}" >/dev/null 2>&1; then \
+         useradd --uid "${PUID}" --gid "${PGID}" --home-dir /home/container --create-home --shell /bin/bash container; \
+       fi \
+    && mkdir -p /home/container/{.wine,data,download,logs,sbox} \
+    && chown -R "${PUID}:${PGID}" /home/container && chmod 1777 /tmp
+
+COPY --from=builder --chown=${PUID}:${PGID} /work/wineprefix /opt/sbox-wine-prefix
+COPY --chown=999:999 Yolk/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+WORKDIR /home/container
+USER ${PUID}:${PGID}
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["start-sbox"]

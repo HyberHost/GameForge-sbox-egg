@@ -20,7 +20,7 @@
 FROM debian:trixie-slim AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG BAKE_WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10"
+ARG BAKE_WINETRICKS_VERBS="win10 vcrun2022"
 ARG BAKE_WIN_DOTNET_VERSION=10.0.0
 
 # Enable i386 and contrib/non-free (matches dxura reference)
@@ -62,6 +62,21 @@ RUN mkdir -p /work && cd /work && \
     rm dotnet-installer.exe && \
     rm -rf "/work/wineprefix/drive_c/ProgramData/Package Cache"
 
+# Bake S&Box server content at build-time (dxura pattern) so first run does
+# not depend on runtime Steam download behavior.
+RUN mkdir -p /work/steamcmd /work/server \
+     && wget -qO /work/steamcmd/steamcmd_linux.tar.gz \
+         https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
+     && tar -xzf /work/steamcmd/steamcmd_linux.tar.gz -C /work/steamcmd \
+     && chmod 0755 /work/steamcmd/steamcmd.sh \
+     && bash /work/steamcmd/steamcmd.sh \
+         +@sSteamCmdForcePlatformType windows \
+         +force_install_dir /work/server \
+         +login anonymous \
+         +app_update 1892930 validate \
+         +quit \
+     && rm -rf /work/steamcmd
+
 # Verify the .NET host was installed (warn only, don't fail build).
 RUN if ! find /work/wineprefix/drive_c -name hostfxr.dll 2>/dev/null | grep -q .; then \
         echo "warn: hostfxr.dll not found — Windows .NET may have failed to install" >&2; \
@@ -95,6 +110,7 @@ ENV CONTAINER_HOME=/home/container \
     # Pterodactyl /home/container volume mount).  Entrypoint copies this to
     # WINEPREFIX on first start if .wine is absent.
     SBOX_BAKED_WINEPREFIX=/opt/sbox-wine-prefix \
+    SBOX_BAKED_SERVER_TEMPLATE=/opt/sbox-server-template \
     SBOX_APP_ID=1892930 \
     SBOX_INSTALL_DIR=/home/container/sbox \
     SBOX_SERVER_EXE=/home/container/sbox/sbox-server.exe \
@@ -104,7 +120,7 @@ ENV CONTAINER_HOME=/home/container \
     # Runtime winetricks / .NET provisioning — disabled by default because the
     # Wine prefix is already fully baked into the image.
     INSTALL_WINETRICKS_DOTNET=0 \
-    WINETRICKS_VERBS="win10 vcrun2022 dotnet48 dotnet10" \
+    WINETRICKS_VERBS="win10 vcrun2022" \
     WINETRICKS_STRICT=0 \
     INSTALL_WIN_DOTNET=0 \
     WIN_DOTNET_VERSION=10.0.0 \
@@ -184,6 +200,7 @@ RUN if ! getent group "${PGID}" >/dev/null 2>&1; then groupadd --gid "${PGID}" c
 # covered by the Pterodactyl /home/container volume bind mount.  The
 # entrypoint will copy this to /home/container/.wine on the first start.
 COPY --from=builder --chown=${PUID}:${PGID} /work/wineprefix /opt/sbox-wine-prefix
+COPY --from=builder --chown=${PUID}:${PGID} /work/server /opt/sbox-server-template
 
 # Pre-initialize the Wine prefix as root so permissions are set correctly
 # This avoids issues when Pterodactyl non-root user tries to copy later.

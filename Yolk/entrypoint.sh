@@ -8,6 +8,7 @@ WINEPREFIX="${WINEPREFIX:-/home/container/.wine}"
 # Pre-baked Wine prefix inside the image; not subject to Pterodactyl's
 # /home/container volume mount, so it is always accessible at startup.
 BAKED_WINEPREFIX="${SBOX_BAKED_WINEPREFIX:-/opt/sbox-wine-prefix}"
+BAKED_SERVER_TEMPLATE="${SBOX_BAKED_SERVER_TEMPLATE:-/opt/sbox-server-template}"
 LOCK_DIR="${WINEPREFIX}/.init-lock"
 SBOX_INSTALL_DIR="${SBOX_INSTALL_DIR:-/home/container/sbox}"
 SBOX_SERVER_EXE="${SBOX_SERVER_EXE:-${SBOX_INSTALL_DIR}/sbox-server.exe}"
@@ -104,6 +105,13 @@ if [ ! -f "${WINEPREFIX}/system.reg" ] && [ -d "${BAKED_WINEPREFIX}/drive_c" ]; 
     echo "info: Wine prefix copied and ready." >&2
 elif [ -f "${WINEPREFIX}/system.reg" ]; then
     echo "info: Wine prefix already initialized at ${WINEPREFIX}" >&2
+fi
+
+# Seed S&Box installation from baked build-time template if runtime volume is empty.
+if [ ! -f "${SBOX_SERVER_EXE}" ] && [ -d "${BAKED_SERVER_TEMPLATE}" ]; then
+    echo "info: first run — seeding S&Box files from ${BAKED_SERVER_TEMPLATE} into ${SBOX_INSTALL_DIR}..." >&2
+    cp -a "${BAKED_SERVER_TEMPLATE}/." "${SBOX_INSTALL_DIR}/"
+    echo "info: S&Box template seeded." >&2
 fi
 
 ensure_wineprefix_arch

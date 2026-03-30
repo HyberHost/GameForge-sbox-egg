@@ -4,10 +4,9 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-03-29T13:07:16+01:00",
-    "name": "Sandbox (S&box) Server ",
+    "name": "Sandbox (S&Box) Server",
     "author": "team@gameforge.gg",
-    "description": "S&Box dedicated server with build-time baked Wine prefix and Windows .NET runtime for stable Pterodactyl startup.",
+    "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET, while SteamCMD is installed by the egg installer and server files are managed at runtime.",
     "features": [],
     "docker_images": {
         "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest": "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest"
@@ -17,14 +16,14 @@
     "config": {
         "files": "{}",
         "startup": "{\r\n    \"done\": \"Loading game|Server started\"\r\n}",
-        "logs": "{\r\n    \"custom\": false,\r\n    \"location\": \"logs\/sbox-*.log\"\r\n}",
+        "logs": "{\r\n    \"custom\": false,\r\n    \"location\": \"logs/sbox-*.log\"\r\n}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!\/bin\/bash\n# No installation required\nexit 0",
-            "container": "alpine:3.18",
-            "entrypoint": "ash"
+            "script": "#!/bin/bash\nset -euo pipefail\n\nmkdir -p /mnt/server /mnt/server/steamcmd /mnt/server/steamapps\ncd /tmp\nrm -f steamcmd.tar.gz\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd --no-same-owner\ncd /mnt/server/steamcmd\nchown -R root:root /mnt || true\nexport HOME=/mnt/server\n\n./steamcmd.sh +quit\n\nmkdir -p /mnt/server/.steam/sdk32\ncp -v linux32/steamclient.so /mnt/server/.steam/sdk32/steamclient.so\nmkdir -p /mnt/server/.steam/sdk64\ncp -v linux64/steamclient.so /mnt/server/.steam/sdk64/steamclient.so\n\necho \"-----------------------------------------\"\necho \"SteamCMD installation completed...\"\necho \"-----------------------------------------\"\n",
+            "container": "ghcr.io/ptero-eggs/installers:debian",
+            "entrypoint": "bash"
         }
     },
     "variables": [
@@ -70,7 +69,7 @@
         },
         {
             "name": "Local Project (.sbproj)",
-            "description": "Optional absolute path to a .sbproj file. If set, this is used instead of GAME\/MAP.",
+            "description": "Optional absolute path to a .sbproj file. If set, this is used instead of GAME/MAP.",
             "env_variable": "SBOX_PROJECT",
             "default_value": "",
             "user_viewable": true,
@@ -89,6 +88,16 @@
             "field_type": "text"
         },
         {
+            "name": "Auto Update",
+            "description": "Set to 1 to run SteamCMD app_update on startup, 0 to skip",
+            "env_variable": "SBOX_AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
             "name": "Branch",
             "description": "Optional Steam beta branch (for example: staging)",
             "env_variable": "SBOX_BRANCH",
@@ -100,7 +109,7 @@
         },
         {
             "name": "Windows .NET Version",
-            "description": "Windows .NET runtime version to install (e.g., 10.0.0, 8.0.0)",
+            "description": "Windows .NET runtime version baked into the runtime image",
             "env_variable": "WIN_DOTNET_VERSION",
             "default_value": "10.0.0",
             "user_viewable": false,

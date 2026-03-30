@@ -24,7 +24,6 @@ ARG BAKE_WINETRICKS_VERBS="win10 vcrun2022"
 ARG BAKE_WIN_DOTNET_VERSION=10.0.0
 ARG BAKE_SBOX_APP_ID=1892930
 
-# Enable i386 and contrib/non-free (matches dxura reference)
 RUN dpkg --add-architecture i386 \
     && sed -i 's/^Components: main$/& contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
@@ -48,14 +47,11 @@ RUN dpkg --add-architecture i386 \
     && apt-get clean \
     && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# Install winetricks from HEAD to ensure dotnet10 verb (PR #2444) is available.
 RUN git clone --depth 1 https://github.com/Winetricks/winetricks.git /tmp/winetricks \
     && cd /tmp/winetricks \
     && make install \
     && rm -rf /tmp/winetricks
 
-# Consolidate Wine prefix setup into one RUN layer (dxura's proven pattern).
-# Do NOT set ENV globally; pass WINEPREFIX inline. Do NOT pre-initialize with wineboot.
 RUN mkdir -p /work && cd /work && \
     WINEPREFIX=/work/wineprefix xvfb-run winetricks -q --force ${BAKE_WINETRICKS_VERBS} && \
     wget -q "https://builds.dotnet.microsoft.com/dotnet/Runtime/${BAKE_WIN_DOTNET_VERSION}/dotnet-runtime-${BAKE_WIN_DOTNET_VERSION}-win-x64.exe" -O dotnet-installer.exe && \
@@ -65,8 +61,7 @@ RUN mkdir -p /work && cd /work && \
 
 # Bake S&Box server content at build-time (dxura pattern) so first run does
 # not depend on runtime Steam download behavior.
-# Some regions/runs return "Missing configuration" for forced platform calls;
-# retry and fallback to native platform without failing the whole image build.
+# Keep this Windows-only to avoid baking Linux depots into the template.
 RUN mkdir -p /work/steamcmd /work/server \
      && wget -qO /work/steamcmd/steamcmd_linux.tar.gz \
          https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
@@ -81,19 +76,13 @@ RUN mkdir -p /work/steamcmd /work/server \
             +login anonymous \
             +app_update ${BAKE_SBOX_APP_ID} validate \
             +quit; then \
-            echo "warn: forced windows download failed; retrying without platform override" >&2; \
-            if ! bash /work/steamcmd/steamcmd.sh \
-                +@ShutdownOnFailedCommand 1 \
-                +@NoPromptForPassword 1 \
-                +force_install_dir /work/server \
-                +login anonymous \
-                +app_update ${BAKE_SBOX_APP_ID} validate \
-                +quit; then \
-                echo "warn: build-time app download failed for app ${BAKE_SBOX_APP_ID}; runtime update will be used" >&2; \
-                mkdir -p /work/server; \
-            fi; \
+            echo "warn: build-time Windows depot download failed for app ${BAKE_SBOX_APP_ID}; runtime update will be required" >&2; \
+            rm -rf /work/server/*; \
+          fi \
+     && if [ ! -f /work/server/sbox-server.exe ]; then \
+            echo "warn: build-time prebake is missing /work/server/sbox-server.exe; startup will rely on runtime SteamCMD update" >&2; \
         fi \
-     && rm -rf /work/steamcmd
+      && rm -rf /work/steamcmd
 
 # Verify the .NET host was installed (warn only, don't fail build).
 RUN if ! find /work/wineprefix/drive_c -name hostfxr.dll 2>/dev/null | grep -q .; then \
@@ -122,25 +111,15 @@ ENV CONTAINER_HOME=/home/container \
     WINEARCH=win64 \
     WINEDEBUG=-all \
     WINEDLLOVERRIDES=icu,icuuc=d \
-    # Path to the pre-baked Wine prefix inside the image (not subject to the
-    # Pterodactyl /home/container volume mount).  Entrypoint copies this to
-    # WINEPREFIX on first start if .wine is absent.
     SBOX_BAKED_WINEPREFIX=/opt/sbox-wine-prefix \
     SBOX_BAKED_SERVER_TEMPLATE=/opt/sbox-server-template \
     SBOX_APP_ID=1892930 \
     SBOX_INSTALL_DIR=/home/container/sbox \
     SBOX_SERVER_EXE=/home/container/sbox/sbox-server.exe \
+    SBOX_AUTO_UPDATE=1 \
     SBOX_LOG_KEEP=10 \
-    # Runtime winetricks / .NET provisioning — disabled by default because the
-    # Wine prefix is already fully baked into the image.
-    INSTALL_WINETRICKS_DOTNET=0 \
-    WINETRICKS_VERBS="win10 vcrun2022" \
-    WINETRICKS_STRICT=0 \
-    INSTALL_WIN_DOTNET=0 \
-    WIN_DOTNET_VERSION=10.0.0 \
-    WIN_DOTNET_INSTALL_METHOD=installer \
-    WIN_DOTNET_ROOT=C:\\Program\ Files\\dotnet \
-    # .NET and Wine performance tuning
+    STEAM_PLATFORM=windows \
+    STEAMCMD_DIR=/home/container/steamcmd \
     DOTNET_EnableWriteXorExecute=0 \
     DOTNET_TieredCompilation=0 \
     DOTNET_ReadyToRun=0 \
@@ -153,38 +132,28 @@ ENV CONTAINER_HOME=/home/container \
     XDG_RUNTIME_DIR=/tmp
 
 RUN apk add --no-cache \
-    bash \
-    ca-certificates \
-    gnutls \
-    libgcc \
-    libstdc++ \
-    tar \
-    wget \
-    wine
+         bash \
+         ca-certificates \
+         gnutls \
+         libgcc \
+         libstdc++ \
+         tar \
+         wget \
+         wine
 
 RUN mkdir -p \
-    ${WINEPREFIX} \
-    ${CONTAINER_HOME}/data \
-    ${CONTAINER_HOME}/download \
-    ${CONTAINER_HOME}/logs \
-    ${SBOX_INSTALL_DIR} \
-    && chmod 1777 /tmp
+         /home/container/.wine \
+         /home/container/data \
+         /home/container/download \
+         /home/container/logs \
+         /home/container/sbox \
+         /home/container/steamcmd \
+     && chmod 1777 /tmp
 
-# Copy the baked Wine prefix from the builder stage into a path that is NOT
-# covered by the Pterodactyl /home/container volume bind mount.  The
-# entrypoint will copy this to /home/container/.wine on the first start.
 COPY --from=builder /work/wineprefix /opt/sbox-wine-prefix
 COPY --from=builder /work/server /opt/sbox-server-template
 
-# Fix permissions on copied templates so non-root user can access them.
-# Pterodactyl typically runs containers as uid 999, so ensure these are readable.
 RUN chmod -R u+rwX,g+rX,o+rX /opt/sbox-wine-prefix /opt/sbox-server-template
-
-# Pre-initialize the Wine prefix as root so permissions are set correctly
-# This avoids issues when Pterodactyl non-root user tries to copy later.
-RUN cp -a /opt/sbox-wine-prefix /root/.wine && \
-    WINEPREFIX=/root/.wine wine "" >/dev/null 2>&1 || true && \
-    rm -rf /root/.wine
 
 COPY Yolk/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh

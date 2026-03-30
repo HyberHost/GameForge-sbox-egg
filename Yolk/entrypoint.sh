@@ -21,8 +21,8 @@ TOKEN="${TOKEN:-}"
 SBOX_PROJECT="${SBOX_PROJECT:-}"
 SBOX_EXTRA_ARGS="${SBOX_EXTRA_ARGS:-}"
 
-STEAM_COMPAT_LOADER="/opt/steam-compat/lib/ld-linux.so.2"
-STEAM_COMPAT_LIB_PATH="/opt/steam-compat/lib/i386-linux-gnu:/opt/steam-compat/usr/lib/i386-linux-gnu:/opt/steam-compat/lib"
+STEAM_COMPAT_LOADER="${STEAMCMD_DIR}/compat/lib/ld-linux.so.2"
+STEAM_COMPAT_LIB_PATH="${STEAMCMD_DIR}/compat/lib/i386-linux-gnu:${STEAMCMD_DIR}/compat/usr/lib/i386-linux-gnu:${STEAMCMD_DIR}/compat/lib"
 SBOX_PREBAKED_SEEDED=0
 
 if [ -z "${SERVER_NAME}" ] && [ -n "${HOSTNAME:-}" ] && ! [[ "${HOSTNAME}" =~ ^[0-9a-f]{12,64}$ ]]; then
@@ -111,8 +111,13 @@ run_steamcmd() {
 
     steamcmd_root="$(cd "$(dirname "${steamcmd_bin}")/.." && pwd)"
 
+    if [ ! -e "/lib/ld-linux.so.2" ] && [ -f "${STEAM_COMPAT_LOADER}"; then
+        ln -sf "${STEAM_COMPAT_LOADER}" /lib/ld-linux.so.2 2>/dev/null || true
+    fi
+
     (
         cd "${steamcmd_root}"
+        LD_LIBRARY_PATH="${STEAM_COMPAT_LIB_PATH}" \
         "${STEAM_COMPAT_LOADER}" \
             --library-path "${STEAM_COMPAT_LIB_PATH}" \
             "${steamcmd_bin}" \

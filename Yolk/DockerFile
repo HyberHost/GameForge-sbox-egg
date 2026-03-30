@@ -152,11 +152,8 @@ RUN mkdir -p \
 
 COPY --from=builder /work/wineprefix /opt/sbox-wine-prefix
 COPY --from=builder /work/server /opt/sbox-server-template
-COPY --from=builder /lib/ld-linux.so.2 /opt/steam-compat/lib/ld-linux.so.2
-COPY --from=builder /lib/i386-linux-gnu /opt/steam-compat/lib/i386-linux-gnu
-COPY --from=builder /usr/lib/i386-linux-gnu /opt/steam-compat/usr/lib/i386-linux-gnu
 
-RUN chmod -R u+rwX,g+rX,o+rX /opt/sbox-wine-prefix /opt/sbox-server-template /opt/steam-compat
+RUN chmod -R u+rwX,g+rX,o+rX /opt/sbox-wine-prefix /opt/sbox-server-template
 
 COPY Yolk/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh

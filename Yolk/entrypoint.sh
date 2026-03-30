@@ -95,6 +95,7 @@ resolve_steamcmd_binary() {
 run_steamcmd() {
     local -a args=("$@")
     local steamcmd_bin=""
+    local steamcmd_root=""
 
     steamcmd_bin="$(resolve_steamcmd_binary || true)"
 
@@ -108,10 +109,15 @@ run_steamcmd() {
         return 1
     fi
 
-    "${STEAM_COMPAT_LOADER}" \
-        --library-path "${STEAM_COMPAT_LIB_PATH}" \
-        "${steamcmd_bin}" \
-        "${args[@]}"
+    steamcmd_root="$(cd "$(dirname "${steamcmd_bin}")/.." && pwd)"
+
+    (
+        cd "${steamcmd_root}"
+        "${STEAM_COMPAT_LOADER}" \
+            --library-path "${STEAM_COMPAT_LIB_PATH}" \
+            "${steamcmd_bin}" \
+            "${args[@]}"
+    )
 }
 
 update_sbox() {
@@ -134,7 +140,11 @@ update_sbox() {
     steam_args+=( validate +quit )
 
     if ! run_steamcmd +quit >/dev/null 2>&1; then
-        echo "warn: SteamCMD runtime probe failed; skipping auto-update" >&2
+        echo "warn: SteamCMD runtime probe failed; cannot run auto-update" >&2
+        if [ ! -f "${SBOX_SERVER_EXE}" ]; then
+            echo "error: SteamCMD probe failed and ${SBOX_SERVER_EXE} is missing" >&2
+            return 1
+        fi
         return 0
     fi
 

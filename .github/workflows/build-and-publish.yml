@@ -9,6 +9,8 @@ on:
       - sandbox-pterodactyl.json
       - .github/workflows/build-and-publish.yml
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 */3 * *" # every 3 days at 3am UTC
 
 concurrency:
   group: ghcr-gameforge-sbox-egg-${{ github.ref }}
@@ -20,7 +22,7 @@ permissions:
 
 jobs:
   docker:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -50,6 +52,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=main,enable={{is_default_branch}}
             type=sha,format=short
+            type=raw,value={{date 'YYYYMMDD-HHmmss'}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -58,6 +61,7 @@ jobs:
           file: Yolk/DockerFile
           platforms: linux/amd64
           push: true
+          pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

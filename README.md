@@ -2,6 +2,8 @@
 
 This repository contains a Pterodactyl egg and container build assets for running an S&Box dedicated server with Wine.
 
+This is working now, We are using it to offer S&Box server hosting, [Looking for a server?](https://gameforge.gg/games/sbox)
+
 ## Primary Goal
 
 Provide a production-ready Pterodactyl egg that:
@@ -15,7 +17,7 @@ Provide a production-ready Pterodactyl egg that:
 - `sandbox-pterodactyl.json`: Pterodactyl egg export (import this into your panel).
 - `Yolk/DockerFile`: Docker image build for the egg runtime.
 - `Yolk/entrypoint.sh`: runtime startup logic.
-- `ref/`: reference files used during development.
+- `ref/`: reference files used during development. (not in the public repo)
 
 ## Pterodactyl Egg Focus
 
@@ -28,7 +30,6 @@ Key details:
   - `GAME`
   - `SERVER_NAME`
   - `MAP`
-  - `TOKEN`
   - `SBOX_PROJECT`
   - `SBOX_EXTRA_ARGS`
 
@@ -40,7 +41,7 @@ At container start, `Yolk/entrypoint.sh`:
 
 ## Quick Start
 
-1. Build and push image (see `Yolk/README.md`).
+1. Build and push image (see `Yolk/README.md`). (Optional: The egg can import our build)
 2. Import `sandbox-pterodactyl.json` into Pterodactyl.
 3. Select your pushed image in egg settings.
 4. Create a server and set variables.
@@ -51,3 +52,8 @@ At container start, `Yolk/entrypoint.sh`:
 - This repo is tuned for Linux/amd64 container runtime.
 - Changes to runtime behavior usually belong in `Yolk/entrypoint.sh`.
 - Changes to panel UX and variables belong in `sandbox-pterodactyl.json`.
+
+## Notes for Hosting Providers
+
+While this egg was built for [GameForge](https://gameforge.gg) to sell S&Box, We are move than happy to see other providers use this and are open to pull requests.
+

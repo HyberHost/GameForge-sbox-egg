@@ -143,8 +143,7 @@ RUN apk add --no-cache \
 
 RUN mkdir -p \
          /home/container/.wine \
-         /home/container/data \
-         /home/container/download \
+         /home/container/projects \
          /home/container/logs \
          /home/container/sbox \
          /home/container/steamcmd \

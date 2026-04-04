@@ -34,7 +34,7 @@
             "default_value": "facepunch.walker",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|string|max:64",
+            "rules": "nullable|string|max:64",
             "field_type": "text"
         },
         {
@@ -69,7 +69,7 @@
         },
         {
             "name": "Local Project (.sbproj)",
-            "description": "Optional absolute path to a .sbproj file. If set, this is used instead of GAME/MAP.",
+            "description": "Optional .sbproj target for +game. Project files must be inside /home/container/projects/; pass only folder/file (for example: richman/richman.sbproj).",
             "env_variable": "SBOX_PROJECT",
             "default_value": "",
             "user_viewable": true,

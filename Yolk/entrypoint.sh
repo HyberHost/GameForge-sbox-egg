@@ -19,6 +19,7 @@ MAP="${MAP:-}"
 SERVER_NAME="${SERVER_NAME:-}"
 TOKEN="${TOKEN:-}"
 SBOX_PROJECT="${SBOX_PROJECT:-}"
+SBOX_PROJECTS_DIR="${SBOX_PROJECTS_DIR:-${CONTAINER_HOME}/projects}"
 SBOX_EXTRA_ARGS="${SBOX_EXTRA_ARGS:-}"
 
 STEAM_COMPAT_LOADER="${STEAMCMD_DIR}/compat/lib/ld-linux.so.2"
@@ -44,7 +45,7 @@ seed_runtime_files() {
         seed_reason="missing Windows server executable"
     fi
 
-    mkdir -p "${CONTAINER_HOME}" "${WINEPREFIX}" "${SBOX_INSTALL_DIR}" "${CONTAINER_HOME}/logs" "${CONTAINER_HOME}/data" "${STEAMCMD_DIR}"
+    mkdir -p "${CONTAINER_HOME}" "${WINEPREFIX}" "${SBOX_INSTALL_DIR}" "${CONTAINER_HOME}/logs" "${STEAMCMD_DIR}" "${SBOX_PROJECTS_DIR}"
 
     if [ ! -f "${WINEPREFIX}/system.reg" ] && [ -d "${BAKED_WINEPREFIX}/drive_c" ]; then
         echo "info: seeding Wine prefix from ${BAKED_WINEPREFIX}" >&2
@@ -59,6 +60,24 @@ seed_runtime_files() {
         echo "warn: ${SBOX_INSTALL_DIR} requires reseed (${seed_reason}) but prebaked Windows template is missing ${BAKED_SERVER_TEMPLATE}/sbox-server.exe" >&2
     fi
 
+}
+
+resolve_project_target() {
+    local project_target=""
+
+    if [ -n "${SBOX_PROJECT}" ]; then
+        if [[ "${SBOX_PROJECT}" = /* ]]; then
+            project_target="${SBOX_PROJECT}"
+        elif [ -f "${SBOX_PROJECTS_DIR}/${SBOX_PROJECT}" ]; then
+            project_target="${SBOX_PROJECTS_DIR}/${SBOX_PROJECT}"
+        elif [ -f "${SBOX_PROJECTS_DIR}/${SBOX_PROJECT}.sbproj" ]; then
+            project_target="${SBOX_PROJECTS_DIR}/${SBOX_PROJECT}.sbproj"
+        else
+            project_target="${SBOX_PROJECT}"
+        fi
+    fi
+
+    printf '%s' "${project_target}"
 }
 
 steamcmd_installed() {
@@ -168,6 +187,7 @@ run_sbox() {
     local -a args=()
     local -a extra=()
     local -a launch_env=()
+    local project_target=""
 
     if [ ! -f "${SBOX_SERVER_EXE}" ]; then
         echo "error: ${SBOX_SERVER_EXE} was not found" >&2
@@ -175,8 +195,10 @@ run_sbox() {
         exit 1
     fi
 
-    if [ -n "${SBOX_PROJECT}" ]; then
-        args+=( "${SBOX_PROJECT}" )
+    project_target="$(resolve_project_target)"
+
+    if [ -n "${project_target}" ]; then
+        args+=( +game "${project_target}" )
     elif [ -n "${GAME}" ]; then
         args+=( +game "${GAME}" )
         if [ -n "${MAP}" ]; then

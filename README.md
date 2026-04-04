@@ -39,6 +39,12 @@ At container start, `Yolk/entrypoint.sh`:
 1. Seeds Wine and server files from baked templates if missing.
 2. Starts `sbox-server.exe` under Wine with selected startup args.
 
+Project selection precedence:
+1. `SBOX_PROJECT` (absolute path, or value resolved under `/home/container/projects`)
+2. `GAME` (with optional `MAP`)
+
+When a project target is selected, startup uses `+game <project-target>`.
+
 ## Quick Start
 
 1. Build and push image (see `Yolk/README.md`). (Optional: The egg can import our build)

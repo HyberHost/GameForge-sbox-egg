@@ -15,7 +15,7 @@
     "startup": "start-sbox",
     "config": {
         "files": "{}",
-        "startup": "{\r\n    \"done\": \"Loading game|Server started|Connected to Steam|Steam Relay Access .* OK|PLAYERS ----------\"\r\n}",
+        "startup": "{\r\n    \"done\": \"Loading game|Server started|[Ll]oad [Cc]omplete|Connected to Steam|Steam Relay Access .* OK|PLAYERS ----------\"\r\n}",
         "logs": "{\r\n    \"custom\": false,\r\n    \"location\": \"logs/sbox-*.log\"\r\n}",
         "stop": "^C"
     },

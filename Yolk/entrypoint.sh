@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euoo pipefail
+set -euo pipefail
 
 CONTAINER_HOME="${CONTAINER_HOME:-/home/container}"
 WINEPREFIX="${WINEPREFIX:-/home/container/.wine}"
@@ -18,21 +18,12 @@ GAME="${GAME:-}"
 MAP="${MAP:-}"
 SERVER_NAME="${SERVER_NAME:-}"
 QUERY_PORT="${QUERY_PORT:-27016}"
-MAX_PLAYERS="${MAX_PLAYERS:-32}"
+MAX_PLAYERS="${MAX_PLAYERS:-}"
 ENABLE_DIRECT_CONNECT="${ENABLE_DIRECT_CONNECT:-0}"
 TOKEN="${TOKEN:-}"
 SBOX_PROJECT="${SBOX_PROJECT:-}"
 SBOX_PROJECTS_DIR="${SBOX_PROJECTS_DIR:-${CONTAINER_HOME}/projects}"
 SBOX_EXTRA_ARGS="${SBOX_EXTRA_ARGS:-}"
-ADMIN_USERS="${ADMIN_USERS:-}"
-SERVER_IP="${SERVER_IP:-{{SERVER_IP}}}"
-
-# Update Checker Variables
-SBOX_UPDATE_CHECK="${SBOX_UPDATE_CHECK:-0}"
-SBOX_UPDATE_CHECK_INTERVAL="${SBOX_UPDATE_CHECK_INTERVAL:-3600}"
-SBOX_SHUTDOWN_TIMER="${SBOX_SHUTDOWN_TIMER:-120}"
-SBOX_SHUTDOWN_MESSAGE="${SBOX_SHUTDOWN_MESSAGE:-Server will restart for updates in [TIME] seconds}"
-SBOX_FINAL_WARNING_MESSAGE="${SBOX_FINAL_WARNING_MESSAGE:-Server restarting in 15 seconds for updates!}"
 
 STEAM_COMPAT_LOADER="${STEAMCMD_DIR}/compat/lib/ld-linux.so.2"
 STEAM_COMPAT_LIB_PATH="${STEAMCMD_DIR}/compat/lib/i386-linux-gnu:${STEAMCMD_DIR}/compat/usr/lib/i386-linux-gnu"
@@ -64,24 +55,6 @@ log_error() {
 }
 
 # ============================================================================
-# ADMIN USERS MANAGEMENT (FIX #1: Made truly optional)
-# ============================================================================
-
-apply_admin_users() {
-    local admin_users_config="${SBOX_INSTALL_DIR}/users/config.json"
-    
-    # Treat empty string or "[]" as no-op
-    if [ -z "${ADMIN_USERS:-}" ] || [ "${ADMIN_USERS}" = "[]" ]; then
-        return 0
-    fi
-    
-    mkdir -p "$(dirname "${admin_users_config}")"
-    echo "${ADMIN_USERS}" > "${admin_users_config}"
-    
-    log_info "admin users configuration written to ${admin_users_config}"
-}
-
-# ============================================================================
 # RUNTIME FILE SEEDING
 # ============================================================================
 
@@ -101,7 +74,7 @@ seed_runtime_files() {
         seed_reason="missing Windows server executable"
     elif [ "${SBOX_AUTO_UPDATE}" = "1" ] && [ -f "${baked_server_exe}" ] && [ "${baked_server_exe}" -nt "${SBOX_SERVER_EXE}" ]; then
         seed_sbox=1
-        seed_reason="newer prebakedWindows server executable"
+        seed_reason="newer prebaked Windows server executable"
     fi
 
     mkdir -p "${CONTAINER_HOME}" "${WINEPREFIX}" "${SBOX_INSTALL_DIR}" "${LOG_DIR}" "${SBOX_PROJECTS_DIR}" "${STEAMCMD_DIR}"
@@ -116,7 +89,7 @@ seed_runtime_files() {
         cp -r "${BAKED_SERVER_TEMPLATE}/." "${SBOX_INSTALL_DIR}/"
         SBOX_PREBAKEDSEEDED=1
     elif [ "${seed_sbox}" = "1" ]; then
-        log_warn "${SBOX_INSTALL_DIR} requires reseed (${seed_reason}) but prebakedWindows template is missing ${baked_server_exe}"
+        log_warn "${SBOX_INSTALL_DIR} requires reseed (${seed_reason}) but prebaked Windows template is missing ${baked_server_exe}"
     fi
 }
 
@@ -182,7 +155,7 @@ resolve_project_target() {
         fi
     fi
 
-    if [ -z "${project_target}" ] && [[ "${SBOX_PROJECT}" != *.sbproj ]] && [ -f "${candidate}.sbproj" ]; then
+    if [ -z "${project_target}" ] && [[ "${candidate}" != *.sbproj ]] && [ -f "${candidate}.sbproj" ]; then
         resolved_candidate="$(canonicalize_existing_path "${candidate}.sbproj" || true)"
         if [ -n "${resolved_candidate}" ] && path_is_within_root "${resolved_candidate}" "${projects_root}"; then
             project_target="${resolved_candidate}"
@@ -279,8 +252,8 @@ run_steamcmd() {
     steamcmd_bin="$(resolve_steamcmd_binary || true)"
 
     if ! steamcmd_installed; then
-        log_warn "SteamCMD runtime binary was not found (checked ${STEAMCMD_DIR}/linux32/steamcmd and ${CONTAINER_HOME}/Steam/linux32/steamcmd)"
-        return 1
+        #log_warn "SteamCMD runtime binary was not found (checked ${STEAMCMD_DIR}/linux32/steamcmd and ${CONTAINER_HOME}/Steam/linux32/steamcmd)"
+        #return 1
     fi
 
     if [ ! -x "${STEAM_COMPAT_LOADER}" ]; then
@@ -305,7 +278,7 @@ run_steamcmd() {
 }
 
 # ============================================================================
-# UPDATE FUNCTIONS (FIXED AUTO-UPDATE + CHECKER)
+# UPDATE FUNCTIONS
 # ============================================================================
 
 update_sbox() {
@@ -315,13 +288,12 @@ update_sbox() {
     steam_args=(
         +@ShutdownOnFailedCommand 1
         +@NoPromptForPassword 1
-        +@sStamCmdForceePlatformType "${force_platform}"
+        +@sSteamCmdForcePlatformType "${force_platform}"
         +force_install_dir "${SBOX_INSTALL_DIR}"
         +login anonymous
         +app_update "${SBOX_APP_ID}"
     )
 
-    # FIXED: Proper quoting for branch parameter
     if [ -n "${SBOX_BRANCH}" ]; then
         steam_args+=( -beta "${SBOX_BRANCH}" )
     fi
@@ -350,156 +322,6 @@ update_sbox() {
 }
 
 # ============================================================================
-# UPDATE CHECKER & SCHEDULED SHUTDOWN (FIX #2 #3 #4)
-# ============================================================================
-
-check_for_server_update() {
-    local -a steam_args_info
-    local temp_info_file
-    local is_update_available=0
-
-    log_info "checking for S&Box server updates (app ${SBOX_APP_ID})..."
-
-    # FIX #2: Use read-only app_info_print to check for updates without downloading
-    temp_info_file=$(mktemp)
-    steam_args_info=(
-        +@ShutdownOnFailedCommand 1
-        +@NoPromptForPassword 1
-        +@sStamCmdForceePlatformType "windows"
-        +force_install_dir "${SBOX_INSTALL_DIR}"
-        +login anonymous
-        +app_info_print "${SBOX_APP_ID}"
-        +quit
-    )
-
-    if run_steamcmd "${steam_args_info[@]}" > "${temp_info_file}" 2>&1; then
-        # Parse output for buildid or update status
-        if grep -q "buildid" "${temp_info_file}" || grep -q "StateFlags" "${temp_info_file}"; then
-            is_update_available=1
-            log_info "update available for app ${SBOX_APP_ID}" >> "${UPDATE_LOG}"
-        else
-            log_info "app ${SBOX_APP_ID} is up-to-date" >> "${UPDATE_LOG}"
-            is_update_available=0
-        fi
-    else
-        log_warn "SteamCMD info check failed" >> "${UPDATE_LOG}"
-        rm -f "${temp_info_file}"
-        return 1
-    fi
-
-    rm -f "${temp_info_file}"
-
-    # Only download/validate if update is available
-    if [ "${is_update_available}" = "1" ]; then
-        local -a steam_args_update
-        steam_args_update=(
-            +@ShutdownOnFailedCommand 1
-            +@NoPromptForPassword 1
-            +@sStamCmdForceePlatformType "windows"
-            +force_install_dir "${SBOX_INSTALL_DIR}"
-            +login anonymous
-            +app_update "${SBOX_APP_ID}"
-        )
-
-        if [ -n "${SBOX_BRANCH}" ]; then
-            steam_args_update+=( -beta "${SBOX_BRANCH}" )
-        fi
-
-        steam_args_update+=( validate +quit )
-
-        if ! run_steamcmd "${steam_args_update[@]}"; then
-            log_warn "SteamCMD update check failed; cannot download update" >> "${UPDATE_LOG}"
-            return 1
-        fi
-
-        log_info "update installed for app ${SBOX_APP_ID}" >> "${UPDATE_LOG}"
-        return 0
-    fi
-
-    return 1
-}
-
-send_server_message() {
-    local msg="$1"
-    
-    # FIX #3: Send message to server console via stdin if server is running
-    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-        printf "say %s\n" "${msg}" > /proc/"${SERVER_PID}"/fd/0 2>/dev/null || true
-        log_info "sent to server: ${msg}"
-    else
-        log_warn "server process not available, message not sent: ${msg}"
-    fi
-}
-
-scheduled_update_shutdown() {
-    local remaining_time="${SBOX_SHUTDOWN_TIMER}"
-    local check_interval=1
-
-    log_info "initiating scheduled update shutdown with ${remaining_time}s timer"
-
-    while [ "${remaining_time}" -gt 0 ]; do
-        local msg=""
-        
-        if [ "${remaining_time}" -le 15 ]; then
-            msg="${SBOX_FINAL_WARNING_MESSAGE}"
-        else
-            msg="${SBOX_SHUTDOWN_MESSAGE//\[TIME\]/${remaining_time}}"
-        fi
-
-        log_info "shutdown timer: ${remaining_time}s remaining - ${msg}"
-        send_server_message "${msg}"
-
-        sleep "${check_interval}"
-        remaining_time=$((remaining_time - check_interval))
-    done
-
-    log_info "update shutdown timer expired, terminating server for update"
-    
-    # FIX #4: Properly terminate the server process
-    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-        log_info "sending SIGTERM to server process ${SERVER_PID}"
-        kill -TERM "${SERVER_PID}" 2>/dev/null || true
-        
-        # Wait for graceful shutdown, then forcefully kill if needed
-        for i in {1..10}; do
-            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-                log_info "server process terminated"
-                break
-            fi
-            sleep 1
-        done
-        
-        if kill -0 "${SERVER_PID}" 2>/dev/null; then
-            log_warn "forcing server shutdown with SIGKILL"
-            kill -9 "${SERVER_PID}" 2>/dev/null || true
-        fi
-    fi
-    
-    exit 0
-}
-
-monitor_for_updates() {
-    local last_check=0
-    local current_time=0
-
-    log_info "update monitor started (checking every ${SBOX_UPDATE_CHECK_INTERVAL}s)"
-
-    while true; do
-        current_time=$(date +%s)
-
-        if [ $((current_time - last_check)) -ge "${SBOX_UPDATE_CHECK_INTERVAL}" ]; then
-            if check_for_server_update; then
-                log_warn "UPDATE AVAILABLE! Initiating scheduled shutdown in ${SBOX_SHUTDOWN_TIMER}s..."
-                scheduled_update_shutdown
-            fi
-            last_check="${current_time}"
-        fi
-
-        sleep 60
-    done
-}
-
-# ============================================================================
 # MAIN SERVER EXECUTION
 # ============================================================================
 
@@ -511,8 +333,8 @@ run_sbox() {
     local project_target=""
 
     if [ ! -f "${SBOX_SERVER_EXE}" ]; then
-        log_error "${SBOX_SERVER_EXE} was not found"
-        log_error "run the egg installation script, or enable auto-update after SteamCMD has been installed"
+        log_error "${SBOX_SERVER_EXE} was not found. Cannot start S&Box server."
+        log_info "try deleting the /sbox folder to trigger a reseed from the prebaked template."
         exit 1
     fi
 
@@ -542,6 +364,11 @@ run_sbox() {
         args+=( +net_game_server_token "${TOKEN}" )
     fi
 
+    # Adds Max Players argument if the variable is set and greater than 0 or "" 
+    if [ -n "${MAX_PLAYERS}" ] && [ "${MAX_PLAYERS}" -gt 0 ]; then
+        args+=( +maxplayers "${MAX_PLAYERS}" )
+    fi
+
     # Add direct connect option if enabled
     if [ "${ENABLE_DIRECT_CONNECT}" = "1" ]; then
         args+=( +net_hide_address 0 )
@@ -561,16 +388,13 @@ run_sbox() {
         DOTNET_ZapDisable=1
     )
 
-    # Apply admin users from variable
-    apply_admin_users
-
-    # FIX #5: Create redacted args for logging (hide token)
     for arg in "${args[@]}"; do
         if [[ "${arg}" == "+net_game_server_token" ]]; then
             redacted_args+=( "+net_game_server_token" "[REDACTED]" )
             # Skip the next iteration to avoid logging the actual token
             continue
         fi
+
         # Only add to redacted if we didn't just skip a token flag
         if [ -z "${skip_next:-}" ]; then
             redacted_args+=( "${arg}" )
@@ -586,15 +410,6 @@ run_sbox() {
     wine "${SBOX_SERVER_EXE}" "${args[@]}" &
     SERVER_PID=$!
     
-    # Start update monitor in background if enabled
-    if [ "${SBOX_UPDATE_CHECK}" = "1" ]; then
-        monitor_for_updates &
-        UPDATE_MONITOR_PID=$!
-        log_info "update monitor started in background (PID: ${UPDATE_MONITOR_PID})"
-    fi
-    
-    # Wait for server process
-    wait "${SERVER_PID}" 2>/dev/null || true
 }
 
 # ============================================================================
@@ -608,7 +423,6 @@ fi
 seed_runtime_files
 
 if [ "${1:-}" = "" ]; then
-    # FIXED: Auto-update now works on boot
     if [ "${SBOX_AUTO_UPDATE}" = "1" ] || [ "${SBOX_PREBAKEDSEEDED}" = "1" ] || [ ! -f "${SBOX_SERVER_EXE}" ]; then
         log_info "updating S&Box server files on boot..."
         update_sbox

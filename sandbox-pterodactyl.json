@@ -9,14 +9,14 @@
     "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET.",
     "features": [],
     "docker_images": {
-        "ghcr.io/hyberhost/gameforge-sbox-egg:latest": "ghcr.io/hyberhost/gameforge-sbox-egg:latest"
+        "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest": "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest"
     },
     "file_denylist": [],
     "startup": "start-sbox",
     "config": {
         "files": "{}",
         "startup": "{\r\n    \"done\": \"Loading game|Server started\"\r\n}",
-        "logs": "{\r\n    \"custom\": true,\r\n    \"location\": \"logs/sbox-*.log\"\r\n}",
+        "logs": "{\r\n    \"custom\": true,\r\n    \"location\": \"logs/*.log\"\r\n}",
         "stop": "^C"
     },
     "scripts": {
@@ -78,53 +78,13 @@
             "field_type": "text"
         },
         {
-            "name": "Query Port",
-            "description": "Query port for server discovery and status queries (UDP). Pterodactyl automatically assigns this as a second port allocation - the first allocation is used for the main server port.",
-            "env_variable": "QUERY_PORT",
-            "default_value": "27016",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|numeric|between:1024,65535",
-            "field_type": "text"
-        },
-        {
             "name": "Max Players",
             "description": "Maximum number of players allowed on the server.",
             "env_variable": "MAX_PLAYERS",
-            "default_value": "32",
+            "default_value": "",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|numeric|between:1,256",
-            "field_type": "text"
-        },
-        {
-            "name": "Direct Connect (No Steam Relay)",
-            "description": "Allow direct connection via IP+Port without Steam relay (0=Steam relay enabled, 1=Direct IP connection enabled). When enabled, players can connect directly to the server IP and port instead of using Steam relay.",
-            "env_variable": "ENABLE_DIRECT_CONNECT",
-            "default_value": "0",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|in:0,1",
-            "field_type": "text"
-        },
-        {
-            "name": "Server Admins (JSON)",
-            "description": "Admin users configuration. Paste your JSON array directly. Format: [{\"SteamId\": \"76561198...\", \"Claims\": [\"kick\", \"ban\", \"restart\"], \"Name\": \"AdminName\"}]. This updates users/config.json automatically on server start.",
-            "env_variable": "ADMIN_USERS",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|json|max:4096",
-            "field_type": "text"
-        },
-        {
-            "name": "Game Server Token",
-            "description": "Optional Steam game server token passed as +net_game_server_token.",
-            "env_variable": "TOKEN",
-            "default_value": "",
-            "user_viewable": false,
-            "user_editable": false,
-            "rules": "nullable|string|max:255",
             "field_type": "text"
         },
         {
@@ -138,19 +98,9 @@
             "field_type": "text"
         },
         {
-            "name": "Branch",
-            "description": "Optional Steam beta branch name used for updates (for example: staging).",
-            "env_variable": "SBOX_BRANCH",
-            "default_value": "",
-            "user_viewable": false,
-            "user_editable": false,
-            "rules": "nullable|string|max:64",
-            "field_type": "text"
-        },
-        {
-            "name": "Enable Update Checker",
-            "description": "Enable background update monitoring for dedicated server updates (1=enabled, 0=disabled). When update is detected, initiates graceful shutdown.",
-            "env_variable": "SBOX_UPDATE_CHECK",
+            "name": "Direct Connect (No Steam Relay)",
+            "description": "Allow direct connection via IP+Port without Steam relay (0=Steam relay enabled, 1=Direct IP connection enabled). When enabled, players can connect directly to the server IP and port instead of using Steam relay.",
+            "env_variable": "ENABLE_DIRECT_CONNECT",
             "default_value": "0",
             "user_viewable": true,
             "user_editable": true,
@@ -158,43 +108,23 @@
             "field_type": "text"
         },
         {
-            "name": "Update Check Interval (seconds)",
-            "description": "How often to check for updates (default 3600 = 1 hour). Minimum 60 seconds.",
-            "env_variable": "SBOX_UPDATE_CHECK_INTERVAL",
-            "default_value": "3600",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|numeric|min:60",
+            "name": "Game Server Token",
+            "description": "Optional Steam game server token passed as +net_game_server_token.",
+            "env_variable": "TOKEN",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "nullable|string|max:255",
             "field_type": "text"
         },
         {
-            "name": "Shutdown Warning Timer (seconds)",
-            "description": "How long to warn players before update shutdown (default 120 = 2 minutes). Minimum 15 seconds.",
-            "env_variable": "SBOX_SHUTDOWN_TIMER",
-            "default_value": "120",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|numeric|min:15",
-            "field_type": "text"
-        },
-        {
-            "name": "Shutdown Warning Message",
-            "description": "Message sent via 'say' command during countdown. Use [TIME] as placeholder for remaining seconds (e.g., 'Server updating in [TIME] seconds').",
-            "env_variable": "SBOX_SHUTDOWN_MESSAGE",
-            "default_value": "Server will restart for updates in [TIME] seconds",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|string|max:128",
-            "field_type": "text"
-        },
-        {
-            "name": "Final Warning Message (Last 15s)",
-            "description": "Message sent via 'say' command during final 15 seconds before shutdown. This overrides the regular message.",
-            "env_variable": "SBOX_FINAL_WARNING_MESSAGE",
-            "default_value": "Server restarting in 15 seconds for updates!",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|string|max:128",
+            "name": "Branch",
+            "description": "Optional Steam beta branch name used for updates (for example: staging).",
+            "env_variable": "SBOX_BRANCH",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "nullable|string|max:64",
             "field_type": "text"
         },
         {

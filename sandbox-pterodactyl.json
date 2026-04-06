@@ -6,7 +6,7 @@
     },
     "name": "Sandbox (S&Box) Server",
     "author": "team@gameforge.gg",
-    "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET, while SteamCMD is installed by the egg installer and server files are managed at runtime.",
+    "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET.",
     "features": [],
     "docker_images": {
         "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest": "ghcr.io\/hyberhost\/gameforge-sbox-egg:latest"
@@ -16,12 +16,12 @@
     "config": {
         "files": "{}",
         "startup": "{\r\n    \"done\": \"Loading game|Server started\"\r\n}",
-        "logs": "{\r\n    \"custom\": false,\r\n    \"location\": \"logs/sbox-*.log\"\r\n}",
+        "logs": "{\r\n    \"custom\": true,\r\n    \"location\": \"logs/*.log\"\r\n}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\nset -euo pipefail\n\nmkdir -p /mnt/server /mnt/server/steamcmd /mnt/server/steamapps\ncd /tmp\nrm -f steamcmd.tar.gz\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd --no-same-owner\ncd /mnt/server/steamcmd\nchown -R root:root /mnt || true\nexport HOME=/mnt/server\n\n./steamcmd.sh +quit\n\nmkdir -p /mnt/server/.steam/sdk32\ncp -v linux32/steamclient.so /mnt/server/.steam/sdk32/steamclient.so\nmkdir -p /mnt/server/.steam/sdk64\ncp -v linux64/steamclient.so /mnt/server/.steam/sdk64/steamclient.so\n\necho \"-----------------------------------------\"\necho \"SteamCMD installation completed...\"\necho \"-----------------------------------------\"\n",
+            "script": "#!/bin/bash\nset -euoo pipefail\n\nmkdir -p /mnt/server /mnt/server/steamcmd /mnt/server/steamapps\ncd /tmp\nrm -f steamcmd.tar.gz\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd --no-same-owner\ncd /mnt/server/steamcmd\nchown -R root:root /mnt || true\nexport HOME=/mnt/server\n\n./steamcmd.sh +quit\n\nmkdir -p /mnt/server/.steam/sdk32\ncp -v linux32/steamclient.so /mnt/server/.steam/sdk32/steamclient.so\nmkdir -p /mnt/server/.steam/sdk64\ncp -v linux64/steamclient.so /mnt/server/.steam/sdk64/steamclient.so\n\necho \"\\n-----------------------------------\"\necho \"SteamCMD installation complete...\"\necho \"-----------------------------------\"\n",
             "container": "ghcr.io/ptero-eggs/installers:debian",
             "entrypoint": "bash"
         }
@@ -78,10 +78,30 @@
             "field_type": "text"
         },
         {
+            "name": "Max Players",
+            "description": "Maximum number of players allowed on the server.",
+            "env_variable": "MAX_PLAYERS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|numeric|between:1,256",
+            "field_type": "text"
+        },
+        {
             "name": "Auto Update",
             "description": "Automatic server updates. Currently not working at runtime; image rebuild is required.",
             "env_variable": "SBOX_AUTO_UPDATE",
             "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Direct Connect (No Steam Relay)",
+            "description": "Allow direct connection via IP+Port without Steam relay (0=Steam relay enabled, 1=Direct IP connection enabled). When enabled, players can connect directly to the server IP and port instead of using Steam relay.",
+            "env_variable": "ENABLE_DIRECT_CONNECT",
+            "default_value": "0",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|in:0,1",

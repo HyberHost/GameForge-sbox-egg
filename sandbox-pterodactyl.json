@@ -4,9 +4,9 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "name": "Sandbox (S&Box) Server - Enhanced",
-    "author": "team@gameforge.gg + Hearth (enhancements)",
-    "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET. Features: Admin user management from panel, auto-mapped server IP, working auto-update on boot, background update checker with scheduled shutdown, and customizable player warning messages.",
+    "name": "Sandbox (S&Box) Server",
+    "author": "team@gameforge.gg",
+    "description": "S&Box dedicated server using a custom runtime image with baked Wine + Windows .NET.",
     "features": [],
     "docker_images": {
         "ghcr.io/hyberhost/gameforge-sbox-egg:latest": "ghcr.io/hyberhost/gameforge-sbox-egg:latest"
@@ -78,18 +78,8 @@
             "field_type": "text"
         },
         {
-            "name": "Server Admins (JSON)",
-            "description": "Admin users configuration. Paste your JSON array directly. Format: [{\"SteamId\": \"76561198...\", \"Claims\": [\"kick\", \"ban\", \"restart\"], \"Name\": \"AdminName\"}]. This updates users/config.json automatically on server start.",
-            "env_variable": "ADMIN_USERS",
-            "default_value": "[{\"SteamId\": \"00000000000000000\", \"Claims\": [\"kick\", \"ban\", \"restart\"], \"Name\": \"Example Admin\"}]",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|json|max:4096",
-            "field_type": "text"
-        },
-        {
             "name": "Query Port",
-            "description": "Query port for server discovery and status queries (UDP). Pterodactyl automatically assigns this as a second port allocation - the first allocation is used for the main server port. Leave as default or set to Pterodactyl's secondary port if manually configuring.",
+            "description": "Query port for server discovery and status queries (UDP). Pterodactyl automatically assigns this as a second port allocation - the first allocation is used for the main server port.",
             "env_variable": "QUERY_PORT",
             "default_value": "27016",
             "user_viewable": true,
@@ -118,6 +108,16 @@
             "field_type": "text"
         },
         {
+            "name": "Server Admins (JSON)",
+            "description": "Admin users configuration. Paste your JSON array directly. Format: [{\"SteamId\": \"76561198...\", \"Claims\": [\"kick\", \"ban\", \"restart\"], \"Name\": \"AdminName\"}]. This updates users/config.json automatically on server start.",
+            "env_variable": "ADMIN_USERS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|json|max:4096",
+            "field_type": "text"
+        },
+        {
             "name": "Game Server Token",
             "description": "Optional Steam game server token passed as +net_game_server_token.",
             "env_variable": "TOKEN",
@@ -128,8 +128,8 @@
             "field_type": "text"
         },
         {
-            "name": "Auto Update on Boot",
-            "description": "Automatically update server files when container starts (1=enabled, 0=disabled). Fixed to work properly at boot time.",
+            "name": "Auto Update",
+            "description": "Automatic server updates. Currently not working at runtime; image rebuild is required.",
             "env_variable": "SBOX_AUTO_UPDATE",
             "default_value": "1",
             "user_viewable": true,
@@ -139,22 +139,12 @@
         },
         {
             "name": "Branch",
-            "description": "Optional Steam beta branch name used for updates (for example: staging). Properly quoted for special characters.",
+            "description": "Optional Steam beta branch name used for updates (for example: staging).",
             "env_variable": "SBOX_BRANCH",
             "default_value": "",
             "user_viewable": false,
             "user_editable": false,
             "rules": "nullable|string|max:64",
-            "field_type": "text"
-        },
-        {
-            "name": "Server IP",
-            "description": "Pterodactyl automatically assigns this. Displays the container's allocated IP address.",
-            "env_variable": "SERVER_IP",
-            "default_value": "{{SERVER_IP}}",
-            "user_viewable": true,
-            "user_editable": false,
-            "rules": "required|string",
             "field_type": "text"
         },
         {

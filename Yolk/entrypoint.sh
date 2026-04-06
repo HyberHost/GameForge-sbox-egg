@@ -37,6 +37,7 @@ SBOX_FINAL_WARNING_MESSAGE="${SBOX_FINAL_WARNING_MESSAGE:-Server restarting in 1
 STEAM_COMPAT_LOADER="${STEAMCMD_DIR}/compat/lib/ld-linux.so.2"
 STEAM_COMPAT_LIB_PATH="${STEAMCMD_DIR}/compat/lib/i386-linux-gnu:${STEAMCMD_DIR}/compat/usr/lib/i386-linux-gnu"
 SBOX_PREBAKEDSEEDED=0
+SERVER_PID=""
 
 # Logging
 LOG_DIR="${CONTAINER_HOME}/logs"
@@ -63,13 +64,14 @@ log_error() {
 }
 
 # ============================================================================
-# ADMIN USERS MANAGEMENT
+# ADMIN USERS MANAGEMENT (FIX #1: Made truly optional)
 # ============================================================================
 
 apply_admin_users() {
     local admin_users_config="${SBOX_INSTALL_DIR}/users/config.json"
     
-    if [ -z "${ADMIN_USERS:-}" ]; then
+    # Treat empty string or "[]" as no-op
+    if [ -z "${ADMIN_USERS:-}" ] || [ "${ADMIN_USERS}" = "[]" ]; then
         return 0
     fi
     
@@ -348,37 +350,85 @@ update_sbox() {
 }
 
 # ============================================================================
-# UPDATE CHECKER & SCHEDULED SHUTDOWN
+# UPDATE CHECKER & SCHEDULED SHUTDOWN (FIX #2 #3 #4)
 # ============================================================================
 
 check_for_server_update() {
-    local -a steam_args
-    local force_platform="windows"
+    local -a steam_args_info
+    local temp_info_file
+    local is_update_available=0
 
     log_info "checking for S&Box server updates (app ${SBOX_APP_ID})..."
 
-    steam_args=(
+    # FIX #2: Use read-only app_info_print to check for updates without downloading
+    temp_info_file=$(mktemp)
+    steam_args_info=(
         +@ShutdownOnFailedCommand 1
         +@NoPromptForPassword 1
-        +@sStamCmdForceePlatformType "${force_platform}"
+        +@sStamCmdForceePlatformType "windows"
         +force_install_dir "${SBOX_INSTALL_DIR}"
         +login anonymous
-        +app_update "${SBOX_APP_ID}"
+        +app_info_print "${SBOX_APP_ID}"
+        +quit
     )
 
-    if [ -n "${SBOX_BRANCH}" ]; then
-        steam_args+=( -beta "${SBOX_BRANCH}" )
-    fi
-
-    steam_args+=( validate +quit )
-
-    if ! run_steamcmd "${steam_args[@]}"; then
-        log_warn "SteamCMD update check failed; cannot auto-update"
+    if run_steamcmd "${steam_args_info[@]}" > "${temp_info_file}" 2>&1; then
+        # Parse output for buildid or update status
+        if grep -q "buildid" "${temp_info_file}" || grep -q "StateFlags" "${temp_info_file}"; then
+            is_update_available=1
+            log_info "update available for app ${SBOX_APP_ID}" >> "${UPDATE_LOG}"
+        else
+            log_info "app ${SBOX_APP_ID} is up-to-date" >> "${UPDATE_LOG}"
+            is_update_available=0
+        fi
+    else
+        log_warn "SteamCMD info check failed" >> "${UPDATE_LOG}"
+        rm -f "${temp_info_file}"
         return 1
     fi
 
-    log_info "update check complete" >> "${UPDATE_LOG}"
-    return 0
+    rm -f "${temp_info_file}"
+
+    # Only download/validate if update is available
+    if [ "${is_update_available}" = "1" ]; then
+        local -a steam_args_update
+        steam_args_update=(
+            +@ShutdownOnFailedCommand 1
+            +@NoPromptForPassword 1
+            +@sStamCmdForceePlatformType "windows"
+            +force_install_dir "${SBOX_INSTALL_DIR}"
+            +login anonymous
+            +app_update "${SBOX_APP_ID}"
+        )
+
+        if [ -n "${SBOX_BRANCH}" ]; then
+            steam_args_update+=( -beta "${SBOX_BRANCH}" )
+        fi
+
+        steam_args_update+=( validate +quit )
+
+        if ! run_steamcmd "${steam_args_update[@]}"; then
+            log_warn "SteamCMD update check failed; cannot download update" >> "${UPDATE_LOG}"
+            return 1
+        fi
+
+        log_info "update installed for app ${SBOX_APP_ID}" >> "${UPDATE_LOG}"
+        return 0
+    fi
+
+    return 1
+}
+
+send_server_message() {
+    local msg="$1"
+    
+    # FIX #3: Send message to server console via stdin if server is running
+    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+        printf "say %s\n" "${msg}" > /proc/"${SERVER_PID}"/fd/0 2>/dev/null || true
+        log_info "sent to server: ${msg}"
+    else
+        log_warn "server process not available, message not sent: ${msg}"
+    fi
 }
 
 scheduled_update_shutdown() {
@@ -397,16 +447,34 @@ scheduled_update_shutdown() {
         fi
 
         log_info "shutdown timer: ${remaining_time}s remaining - ${msg}"
-
-        # Try to send message to server console (RCON would be ideal here)
-        # For now, log it prominently so admins see it
-        echo "say ${msg}" 2>/dev/null || true
+        send_server_message "${msg}"
 
         sleep "${check_interval}"
         remaining_time=$((remaining_time - check_interval))
     done
 
     log_info "update shutdown timer expired, terminating server for update"
+    
+    # FIX #4: Properly terminate the server process
+    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+        log_info "sending SIGTERM to server process ${SERVER_PID}"
+        kill -TERM "${SERVER_PID}" 2>/dev/null || true
+        
+        # Wait for graceful shutdown, then forcefully kill if needed
+        for i in {1..10}; do
+            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+                log_info "server process terminated"
+                break
+            fi
+            sleep 1
+        done
+        
+        if kill -0 "${SERVER_PID}" 2>/dev/null; then
+            log_warn "forcing server shutdown with SIGKILL"
+            kill -9 "${SERVER_PID}" 2>/dev/null || true
+        fi
+    fi
+    
     exit 0
 }
 
@@ -439,6 +507,7 @@ run_sbox() {
     local -a args=()
     local -a extra=()
     local -a launch_env=()
+    local -a redacted_args=()
     local project_target=""
 
     if [ ! -f "${SBOX_SERVER_EXE}" ]; then
@@ -476,7 +545,6 @@ run_sbox() {
     # Add direct connect option if enabled
     if [ "${ENABLE_DIRECT_CONNECT}" = "1" ]; then
         args+=( +net_hide_address 0 )
-        log_info "Direct connect (Steam relay disabled) enabled"
     fi
 
     if [ -n "${SBOX_EXTRA_ARGS}" ]; then
@@ -496,11 +564,37 @@ run_sbox() {
     # Apply admin users from variable
     apply_admin_users
 
+    # FIX #5: Create redacted args for logging (hide token)
+    for arg in "${args[@]}"; do
+        if [[ "${arg}" == "+net_game_server_token" ]]; then
+            redacted_args+=( "+net_game_server_token" "[REDACTED]" )
+            # Skip the next iteration to avoid logging the actual token
+            continue
+        fi
+        # Only add to redacted if we didn't just skip a token flag
+        if [ -z "${skip_next:-}" ]; then
+            redacted_args+=( "${arg}" )
+        else
+            unset skip_next
+        fi
+    done
+
     log_info "Starting S&Box server on ${SERVER_IP}"
-    log_info "Command: wine \"${SBOX_SERVER_EXE}\" ${args[*]}"
+    log_info "Command: wine \"${SBOX_SERVER_EXE}\" ${redacted_args[*]}"
 
     cd "${SBOX_INSTALL_DIR}"
-    exec env "${launch_env[@]}" wine "${SBOX_SERVER_EXE}" "${args[@]}"
+    wine "${SBOX_SERVER_EXE}" "${args[@]}" &
+    SERVER_PID=$!
+    
+    # Start update monitor in background if enabled
+    if [ "${SBOX_UPDATE_CHECK}" = "1" ]; then
+        monitor_for_updates &
+        UPDATE_MONITOR_PID=$!
+        log_info "update monitor started in background (PID: ${UPDATE_MONITOR_PID})"
+    fi
+    
+    # Wait for server process
+    wait "${SERVER_PID}" 2>/dev/null || true
 }
 
 # ============================================================================
@@ -518,13 +612,6 @@ if [ "${1:-}" = "" ]; then
     if [ "${SBOX_AUTO_UPDATE}" = "1" ] || [ "${SBOX_PREBAKEDSEEDED}" = "1" ] || [ ! -f "${SBOX_SERVER_EXE}" ]; then
         log_info "updating S&Box server files on boot..."
         update_sbox
-    fi
-    
-    # Start update monitor in background if enabled
-    if [ "${SBOX_UPDATE_CHECK}" = "1" ]; then
-        monitor_for_updates &
-        UPDATE_MONITOR_PID=$!
-        log_info "update monitor started in background (PID: ${UPDATE_MONITOR_PID})"
     fi
     
     run_sbox
